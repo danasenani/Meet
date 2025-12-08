@@ -2,18 +2,25 @@ import SwiftUI
 
 struct CreateAccountView: View {
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var localizationManager: LocalizationManager
+    @Environment(\.dismiss) var dismiss
+    
     @State private var name = ""
     @State private var phoneNumber = ""
     @State private var password = ""
     @State private var communicationMethod = ""
-    @State private var selectedJob = "Student"
+    @State private var job = ""
     @State private var selectedGender = "Male"
+    
+    @State private var isCreating = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var isLoading = false
     
-    let jobs = ["Student", "Teacher", "Engineer", "Doctor", "Designer", "Other"]
     let genders = ["Male", "Female"]
+    
+    var strings: LocalizedStrings {
+        LocalizedStrings(lang: localizationManager.currentLanguage)
+    }
     
     var body: some View {
         ZStack {
@@ -22,150 +29,107 @@ struct CreateAccountView: View {
             
             ScrollView {
                 VStack(spacing: 20) {
-                    Text("Let's Meet!")
-                        .font(.system(size: 32, weight: .semibold))
-                        .padding(.top, 60)
-                        .padding(.bottom, 20)
+                    Text(strings.createAccount)
+                        .font(localizationManager.isArabic ? .custom("Dubai-Bold", size: 28) : .title)
+                        .fontWeight(.semibold)
+                        .padding(.top, 40)
                     
-                    // Name Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Name")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        TextField("", text: $name)
+                    VStack(spacing: 16) {
+                        // Name
+                        TextField(strings.name, text: $name)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
                             .padding()
                             .background(Color.white)
-                            .cornerRadius(8)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Phone Number Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Phone Number")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        TextField("", text: $phoneNumber)
+                            .cornerRadius(12)
+                            .multilineTextAlignment(localizationManager.isArabic ? .trailing : .leading)
+                        
+                        // Phone Number
+                        TextField(strings.phoneNumber, text: $phoneNumber)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
                             .keyboardType(.phonePad)
                             .padding()
                             .background(Color.white)
-                            .cornerRadius(8)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Password Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Password")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        SecureField("", text: $password)
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(8)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Communication Method Field
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Communication Method")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        TextField("", text: $communicationMethod)
-                            .padding()
-                            .background(Color.white)
-                            .cornerRadius(8)
-                    }
-                    .padding(.horizontal, 40)
-                    
-                    // Job and Gender Dropdowns
-                    HStack(spacing: 16) {
-                        // Job Dropdown
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Job")
-                                .font(.system(size: 14))
-                                .foregroundColor(.gray)
-                            Menu {
-                                ForEach(jobs, id: \.self) { job in
-                                    Button(job) {
-                                        selectedJob = job
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(selectedJob)
-                                        .foregroundColor(.black)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .foregroundColor(.gray)
-                                }
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(8)
-                            }
-                        }
+                            .cornerRadius(12)
+                            .multilineTextAlignment(localizationManager.isArabic ? .trailing : .leading)
                         
-                        // Gender Dropdown
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Gender")
-                                .font(.system(size: 14))
-                                .foregroundColor(.gray)
-                            Menu {
-                                ForEach(genders, id: \.self) { gender in
-                                    Button(gender) {
-                                        selectedGender = gender
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Text(selectedGender)
-                                        .foregroundColor(.black)
-                                    Spacer()
-                                    Image(systemName: "chevron.down")
-                                        .foregroundColor(.gray)
-                                }
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(8)
+                        // Password
+                        SecureField(strings.password, text: $password)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(12)
+                        
+                        // Communication Method
+                        TextField(strings.communicationMethod, text: $communicationMethod)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .multilineTextAlignment(localizationManager.isArabic ? .trailing : .leading)
+                        
+                        // Job
+                        TextField(strings.job, text: $job)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                            .padding()
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .multilineTextAlignment(localizationManager.isArabic ? .trailing : .leading)
+                        
+                        // Gender Picker
+                        VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 8) {
+                            Text(strings.gender)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                                .fontWeight(.medium)
+                            
+                            Picker("", selection: $selectedGender) {
+                                Text(strings.male).tag("Male")
+                                Text(strings.female).tag("Female")
                             }
+                            .pickerStyle(SegmentedPickerStyle())
                         }
+                        .padding(.top, 10)
                     }
                     .padding(.horizontal, 40)
                     
-                    // Create Account Button
+                    // Sign Up Button
                     Button(action: createAccount) {
-                        if isLoading {
+                        if isCreating {
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 50)
+                                .padding()
                         } else {
-                            Text("Create Account")
-                                .font(.system(size: 18, weight: .medium))
+                            Text(strings.signUp)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                                .fontWeight(.medium)
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 50)
+                                .padding()
                         }
                     }
-                    .background(Color(red: 0.95, green: 0.7, blue: 0.7))
-                    .cornerRadius(25)
+                    .background(Color(red: 0.7, green: 0.85, blue: 0.85))
+                    .cornerRadius(12)
                     .padding(.horizontal, 40)
                     .padding(.top, 20)
-                    .disabled(isLoading)
+                    .disabled(isCreating)
                     
-                    // Login Link
+                    // Already have account
                     HStack {
-                        Text("Have an Account?")
+                        Text(strings.alreadyHaveAccount)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 15) : .footnote)
                             .foregroundColor(.gray)
-                        NavigationLink("Login", destination: LoginView())
-                            .foregroundColor(.black)
+                        Button(action: { dismiss() }) {
+                            Text(strings.login)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 15) : .footnote)
+                                .fontWeight(.medium)
+                                .foregroundColor(Color(red: 0.7, green: 0.85, blue: 0.85))
+                        }
                     }
-                    .font(.system(size: 14))
-                    .padding(.top, 10)
-                    
-                    Spacer()
+                    .padding(.bottom, 40)
                 }
             }
         }
-        .navigationBarBackButtonHidden(false)
+        .navigationBarBackButtonHidden(true)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -174,34 +138,28 @@ struct CreateAccountView: View {
     }
     
     func createAccount() {
-        // Validation
-        guard !name.isEmpty, !phoneNumber.isEmpty, !password.isEmpty, !communicationMethod.isEmpty else {
-            errorMessage = "Please fill in all fields"
+        guard !name.isEmpty, !phoneNumber.isEmpty, !password.isEmpty else {
+            errorMessage = "Please fill all required fields"
             showError = true
             return
         }
         
-        guard password.count >= 6 else {
-            errorMessage = "Password must be at least 6 characters"
-            showError = true
-            return
-        }
-        
-        isLoading = true
+        isCreating = true
         
         authService.register(
             name: name,
             phoneNumber: phoneNumber,
             password: password,
             communicationMethod: communicationMethod,
-            job: selectedJob,
+            job: job,
             gender: selectedGender
         ) { result in
-            isLoading = false
+            isCreating = false
             
             switch result {
             case .success:
-                print("✅ Registration successful")
+                // Registration successful - HomeView will show automatically
+                break
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 showError = true
@@ -212,4 +170,6 @@ struct CreateAccountView: View {
 
 #Preview {
     CreateAccountView()
+        .environmentObject(AuthService())
+        .environmentObject(LocalizationManager())
 }

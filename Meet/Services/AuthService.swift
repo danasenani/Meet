@@ -139,4 +139,32 @@ class AuthService: ObservableObject {
             }
         }
     }
+    // Update user profile
+    func updateProfile(userId: String, name: String, communicationMethod: String, job: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let updates: [String: Any] = [
+            "name": name,
+            "communicationMethod": communicationMethod,
+            "job": job
+        ]
+        
+        db.collection("users").document(userId).updateData(updates) { [weak self] error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            
+            // Update local currentUser
+            if var user = self?.currentUser {
+                user.name = name
+                user.communicationMethod = communicationMethod
+                user.job = job
+                
+                Task { @MainActor in
+                    self?.currentUser = user
+                }
+            }
+            
+            completion(.success(()))
+        }
+    }
 }

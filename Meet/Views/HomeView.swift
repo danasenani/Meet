@@ -2,8 +2,13 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var localizationManager: LocalizationManager
     @StateObject private var tableService = TableService()
     @State private var showProfile = false
+    
+    var strings: LocalizedStrings {
+        LocalizedStrings(lang: localizationManager.currentLanguage)
+    }
     
     private func loadData() {
         print("🔍 Loading data...")
@@ -25,55 +30,65 @@ struct HomeView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color(red: 0.95, green: 0.94, blue: 0.92)
-                    .ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Header
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Let's Meet In")
-                                .font(.system(size: 24, weight: .semibold))
-                            Text("Riyadh")
-                                .font(.system(size: 24, weight: .light))
-                                .foregroundColor(.gray)
-                        }
+            Group {
+                if tableService.myBooking != nil {
+                    // User has active booking - show booking status
+                    BookingStatusView()
+                        .environmentObject(authService)
+                        .environmentObject(localizationManager)
+                        .environmentObject(tableService)
+                } else {
+                    // No booking - show event list
+                    ZStack {
+                        Color(red: 0.95, green: 0.94, blue: 0.92)
+                            .ignoresSafeArea()
                         
-                        Spacer()
-                        
-                        Button(action: { showProfile = true }) {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Image(systemName: "person.fill")
+                        VStack(spacing: 0) {
+                            // Header
+                            HStack {
+                                VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 4) {
+                                    Text(strings.letsMeetIn)
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 22) : .title2)
+                                        .fontWeight(.semibold)
+                                    Text(strings.riyadh)
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Light", size: 22) : .title2)
+                                        .fontWeight(.light)
                                         .foregroundColor(.gray)
-                                )
-                        }
-                    }
-                    .padding()
-                    
-                    // Subtitle
-                    Text("Choose your event")
-                        .font(.system(size: 16))
-                        .foregroundColor(.gray)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal)
-                        .padding(.bottom, 20)
-                    
-                    // Tables List
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            ForEach(tableService.tables) { table in
-                                NavigationLink(destination: ConfirmBookingView(table: table)
-                                    .environmentObject(authService)
-                                    .environmentObject(tableService)) {
-                                    TableRowView(table: table)
+                                }
+                                
+                                Spacer()
+                                
+                                Button(action: { showProfile = true }) {
+                                    if let user = authService.currentUser {
+                                        AvatarView(name: user.name, size: 40)
+                                    }
                                 }
                             }
+                            .padding()
+                            
+                            // Subtitle
+                            Text(strings.chooseYourEvent)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                                .foregroundColor(.gray)
+                                .frame(maxWidth: .infinity, alignment: localizationManager.isArabic ? .trailing : .leading)
+                                .padding(.horizontal)
+                                .padding(.bottom, 20)
+                            
+                            // Tables List
+                            ScrollView {
+                                VStack(spacing: 16) {
+                                    ForEach(tableService.tables) { table in
+                                        NavigationLink(destination: ConfirmBookingView(table: table)
+                                            .environmentObject(authService)
+                                            .environmentObject(localizationManager)
+                                            .environmentObject(tableService)) {
+                                            TableRowView(table: table, localizationManager: localizationManager)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
                         }
-                        .padding(.horizontal)
                     }
                 }
             }
@@ -81,6 +96,7 @@ struct HomeView: View {
             .sheet(isPresented: $showProfile) {
                 ProfileView()
                     .environmentObject(authService)
+                    .environmentObject(localizationManager)
             }
             .onAppear {
                 loadData()
@@ -90,32 +106,17 @@ struct HomeView: View {
                     loadData()
                 }
             }
-            .overlay(
-                // Generate Button
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            tableService.generateMonthlyTables()
-                        }) {
-                            Text("Generate")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white)
-                                .padding(12)
-                                .background(Color.red)
-                                .cornerRadius(8)
-                        }
-                        .padding()
-                    }
-                }
-            )
         }
     }
 }
 
 struct TableRowView: View {
     let table: MeetingTable
+    @ObservedObject var localizationManager: LocalizationManager
+    
+    var strings: LocalizedStrings {
+        LocalizedStrings(lang: localizationManager.currentLanguage)
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -126,24 +127,25 @@ struct TableRowView: View {
                     .frame(width: 60, height: 60)
                 
                 Image(systemName: getActivityIcon())
-                    .font(.system(size: 28))
+                    .font(.title2)
                     .foregroundColor(.white)
             }
             
             // Info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(table.displayName)
-                    .font(.system(size: 18, weight: .medium))
+            VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 4) {
+                Text(strings.displayName(activity: table.activityType, isWomenOnly: table.isWomenOnly))
+                    .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                    .fontWeight(.medium)
                     .foregroundColor(.black)
                 Text(table.formattedDate)
-                    .font(.system(size: 14))
+                    .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 15) : .subheadline)
                     .foregroundColor(.gray)
             }
             
             Spacer()
             
             // Arrow
-            Image(systemName: "chevron.right")
+            Image(systemName: localizationManager.isArabic ? "chevron.left" : "chevron.right")
                 .foregroundColor(.gray)
         }
         .padding()
@@ -163,13 +165,19 @@ struct TableRowView: View {
     }
     
     func getActivityColor() -> Color {
-        switch table.activityType {
-        case "Dinner": return Color(red: 0.95, green: 0.7, blue: 0.7)
-        case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)
-        case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)
-        case "Walk": return Color(red: 0.95, green: 0.7, blue: 0.7)
-        case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)
-        default: return Color.gray
+        if table.isWomenOnly {
+            // All women-only events are pink
+            return Color(red: 0.98, green: 0.8, blue: 0.8)
+        } else {
+            // Regular versions - unique vibrant colors
+            switch table.activityType {
+            case "Dinner": return Color(red: 0.95, green: 0.75, blue: 0.6)   // Orange/Peach
+            case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)     // Blue
+            case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)    // Purple
+            case "Walk": return Color(red: 0.7, green: 0.85, blue: 0.85)     // Teal
+            case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)       // Green
+            default: return Color.gray
+            }
         }
     }
 }
@@ -177,4 +185,5 @@ struct TableRowView: View {
 #Preview {
     HomeView()
         .environmentObject(AuthService())
+        .environmentObject(LocalizationManager())
 }

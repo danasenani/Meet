@@ -1,20 +1,20 @@
 import SwiftUI
-import FirebaseFirestore
-import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var localizationManager: LocalizationManager
     @Environment(\.dismiss) var dismiss
     
     @State private var isEditing = false
     @State private var editedName = ""
     @State private var editedCommunicationMethod = ""
     @State private var editedJob = ""
-    @State private var showError = false
-    @State private var errorMessage = ""
     @State private var isSaving = false
+    @State private var showLanguagePicker = false
     
-    let jobs = ["Student", "Teacher", "Engineer", "Doctor", "Designer", "Other"]
+    var strings: LocalizedStrings {
+        LocalizedStrings(lang: localizationManager.currentLanguage)
+    }
     
     var body: some View {
         NavigationStack {
@@ -24,200 +24,141 @@ struct ProfileView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        Text("Profile")
-                            .font(.system(size: 28, weight: .semibold))
-                            .padding(.top, 20)
-                        
-                        // Profile Picture
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 100, height: 100)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 50))
-                                    .foregroundColor(.gray)
-                            )
-                            .padding(.top, 20)
-                        
-                        if let user = authService.currentUser {
-                            // User Info Fields
-                            VStack(spacing: 16) {
-                                // Name (Editable)
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Name")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                    if isEditing {
-                                        TextField("", text: $editedName)
-                                            .padding()
-                                            .background(Color.white)
-                                            .cornerRadius(8)
-                                    } else {
-                                        Text(user.name)
-                                            .padding()
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.white)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                                
-                                // Phone Number (Read-only)
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Phone Number")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                    Text(user.phoneNumber)
-                                        .padding()
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.white.opacity(0.5))
-                                        .cornerRadius(8)
-                                }
-                                
-                                // Communication Method (Editable)
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Communication Method")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.gray)
-                                    if isEditing {
-                                        TextField("", text: $editedCommunicationMethod)
-                                            .padding()
-                                            .background(Color.white)
-                                            .cornerRadius(8)
-                                    } else {
-                                        Text(user.communicationMethod)
-                                            .padding()
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.white)
-                                            .cornerRadius(8)
-                                    }
-                                }
-                                
-                                // Job and Gender
-                                HStack(spacing: 16) {
-                                    // Job (Editable)
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Job")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(.gray)
-                                        if isEditing {
-                                            Menu {
-                                                ForEach(jobs, id: \.self) { job in
-                                                    Button(job) {
-                                                        editedJob = job
-                                                    }
-                                                }
-                                            } label: {
-                                                HStack {
-                                                    Text(editedJob)
-                                                        .foregroundColor(.black)
-                                                    Spacer()
-                                                    Image(systemName: "chevron.down")
-                                                        .foregroundColor(.gray)
-                                                }
-                                                .padding()
-                                                .background(Color.white)
-                                                .cornerRadius(8)
-                                            }
-                                        } else {
-                                            Text(user.job)
-                                                .padding()
-                                                .frame(maxWidth: .infinity, alignment: .leading)
-                                                .background(Color.white)
-                                                .cornerRadius(8)
-                                        }
-                                    }
-                                    
-                                    // Gender (Read-only)
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Gender")
-                                            .font(.system(size: 14))
-                                            .foregroundColor(.gray)
-                                        Text(user.gender)
-                                            .padding()
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.white.opacity(0.5))
-                                            .cornerRadius(8)
-                                    }
-                                }
+                        // Header
+                        HStack {
+                            Button(action: { dismiss() }) {
+                                Image(systemName: localizationManager.isArabic ? "chevron.right" : "chevron.left")
+                                    .foregroundColor(.black)
                             }
-                            .padding(.horizontal, 40)
-                            .padding(.top, 20)
-                        }
-                        
-                        Spacer()
-                        
-                        // Edit/Save Button
-                        if isEditing {
-                            Button(action: saveChanges) {
+                            
+                            Spacer()
+                            
+                            Text(strings.profile)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Bold", size: 20) : .headline)
+                            
+                            Spacer()
+                            
+                            Button(action: {
+                                if isEditing {
+                                    saveProfile()
+                                } else {
+                                    startEditing()
+                                }
+                            }) {
                                 if isSaving {
                                     ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 50)
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .black))
                                 } else {
-                                    Text("Save Changes")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 50)
+                                    Text(isEditing ? strings.save : strings.edit)
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                                        .foregroundColor(.black)
                                 }
                             }
-                            .background(Color(red: 0.7, green: 0.85, blue: 0.85))
-                            .cornerRadius(25)
-                            .padding(.horizontal, 40)
                             .disabled(isSaving)
-                            
-                            Button(action: cancelEdit) {
-                                Text("Cancel")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 50)
-                            }
-                            .padding(.horizontal, 40)
-                        } else {
-                            Button(action: startEditing) {
-                                Text("Edit Profile")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 50)
-                                    .background(Color(red: 0.7, green: 0.85, blue: 0.85))
-                                    .cornerRadius(25)
-                            }
-                            .padding(.horizontal, 40)
+                        }
+                        .padding()
+                        
+                        // Profile Picture
+                        if let user = authService.currentUser {
+                            AvatarView(name: user.name, size: 100)
+                                .padding(.top, 20)
                         }
                         
-                        // Log Out Button
+                        // Profile Info
+                        VStack(spacing: 16) {
+                            if let user = authService.currentUser {
+                                // Name
+                                ProfileField(
+                                    label: strings.name,
+                                    value: isEditing ? $editedName : .constant(user.name),
+                                    isEditing: isEditing,
+                                    isArabic: localizationManager.isArabic
+                                )
+                                
+                                // Phone Number (not editable)
+                                ProfileField(
+                                    label: strings.phoneNumber,
+                                    value: .constant(user.phoneNumber),
+                                    isEditing: false,
+                                    isArabic: localizationManager.isArabic
+                                )
+                                
+                                // Communication Method
+                                ProfileField(
+                                    label: strings.communicationMethod,
+                                    value: isEditing ? $editedCommunicationMethod : .constant(user.communicationMethod),
+                                    isEditing: isEditing,
+                                    isArabic: localizationManager.isArabic
+                                )
+                                
+                                // Job
+                                ProfileField(
+                                    label: strings.job,
+                                    value: isEditing ? $editedJob : .constant(user.job),
+                                    isEditing: isEditing,
+                                    isArabic: localizationManager.isArabic
+                                )
+                                
+                                // Gender (not editable)
+                                ProfileField(
+                                    label: strings.gender,
+                                    value: .constant(user.gender == "Male" ? strings.male : strings.female),
+                                    isEditing: false,
+                                    isArabic: localizationManager.isArabic
+                                )
+                            }
+                            
+                            // Language Selector
+                            Button(action: { showLanguagePicker = true }) {
+                                HStack {
+                                    Text(strings.languageText)
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 15) : .caption)
+                                        .foregroundColor(.gray)
+                                        .frame(maxWidth: .infinity, alignment: localizationManager.isArabic ? .trailing : .leading)
+                                    
+                                    Text(localizationManager.currentLanguage.displayName)
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                                        .foregroundColor(.black)
+                                    
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption)
+                                        .foregroundColor(.gray)
+                                }
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal, 40)
+                        .padding(.top, 20)
+                        
+                        // Logout Button
                         Button(action: {
                             authService.logout()
                             dismiss()
                         }) {
-                            Text("Log out")
-                                .font(.system(size: 16))
-                                .foregroundColor(.gray)
+                            Text(strings.logout)
+                                .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 50)
-                                .background(Color.white)
-                                .cornerRadius(25)
+                                .padding()
+                                .background(Color(red: 0.95, green: 0.7, blue: 0.7))
+                                .cornerRadius(12)
                         }
                         .padding(.horizontal, 40)
+                        .padding(.top, 30)
                         .padding(.bottom, 40)
                     }
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.black)
+            .navigationBarHidden(true)
+            .confirmationDialog(strings.languageText, isPresented: $showLanguagePicker, titleVisibility: .visible) {
+                ForEach(Language.allCases, id: \.self) { language in
+                    Button(language.displayName) {
+                        localizationManager.currentLanguage = language
                     }
                 }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
             }
         }
     }
@@ -231,49 +172,57 @@ struct ProfileView: View {
         }
     }
     
-    func cancelEdit() {
-        isEditing = false
-    }
-    
-    func saveChanges() {
-        guard var user = authService.currentUser else { return }
-        guard let userId = user.id else { return }
-        
-        // Validation
-        guard !editedName.isEmpty, !editedCommunicationMethod.isEmpty else {
-            errorMessage = "Name and Communication Method cannot be empty"
-            showError = true
-            return
-        }
+    func saveProfile() {
+        guard let userId = authService.currentUser?.id else { return }
         
         isSaving = true
         
-        // Update user object
-        user.name = editedName
-        user.communicationMethod = editedCommunicationMethod
-        user.job = editedJob
-        
-        // Save to Firestore
-        let db = Firestore.firestore()
-        
-        do {
-            try db.collection("users").document(userId).setData(from: user) { error in
-                isSaving = false
-                
-                if let error = error {
-                    errorMessage = error.localizedDescription
-                    showError = true
-                } else {
-                    // Update local user
-                    authService.currentUser = user
-                    isEditing = false
-                    print("✅ Profile updated successfully")
-                }
-            }
-        } catch {
+        authService.updateProfile(
+            userId: userId,
+            name: editedName,
+            communicationMethod: editedCommunicationMethod,
+            job: editedJob
+        ) { result in
             isSaving = false
-            errorMessage = error.localizedDescription
-            showError = true
+            isEditing = false
+            
+            switch result {
+            case .success:
+                print("✅ Profile updated")
+            case .failure(let error):
+                print("❌ Error updating profile: \(error)")
+            }
+        }
+    }
+}
+
+struct ProfileField: View {
+    let label: String
+    @Binding var value: String
+    let isEditing: Bool
+    let isArabic: Bool
+    
+    var body: some View {
+        VStack(alignment: isArabic ? .trailing : .leading, spacing: 8) {
+            Text(label)
+                .font(isArabic ? .custom("Dubai-Medium", size: 15) : .caption)
+                .foregroundColor(.gray)
+            
+            if isEditing {
+                TextField(label, text: $value)
+                    .font(isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+                    .multilineTextAlignment(isArabic ? .trailing : .leading)
+            } else {
+                Text(value)
+                    .font(isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                    .frame(maxWidth: .infinity, alignment: isArabic ? .trailing : .leading)
+                    .padding()
+                    .background(Color.white)
+                    .cornerRadius(12)
+            }
         }
     }
 }
@@ -281,4 +230,5 @@ struct ProfileView: View {
 #Preview {
     ProfileView()
         .environmentObject(AuthService())
+        .environmentObject(LocalizationManager())
 }

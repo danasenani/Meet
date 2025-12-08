@@ -4,6 +4,7 @@ import FirebaseCore
 @main
 struct MeetApp: App {
     @StateObject private var authService = AuthService()
+    @StateObject private var localizationManager = LocalizationManager()
     
     init() {
         FirebaseApp.configure()
@@ -11,14 +12,18 @@ struct MeetApp: App {
     
     var body: some Scene {
         WindowGroup {
-            Group {
-                if authService.isAuthenticated && authService.currentUser != nil {
-                    HomeView()
-                        .environmentObject(authService)
-                } else {
-                    SplashView()
-                        .environmentObject(authService)
-                }
+            if authService.isAuthenticated {
+                HomeView()
+                    .environmentObject(authService)
+                    .environmentObject(localizationManager)
+                    .environment(\.layoutDirection, localizationManager.layoutDirection)
+                    .environment(\.locale, .init(identifier: localizationManager.currentLanguage.rawValue))
+            } else {
+                SplashView()
+                    .environmentObject(authService)
+                    .environmentObject(localizationManager)
+                    .environment(\.layoutDirection, localizationManager.layoutDirection)
+                    .environment(\.locale, .init(identifier: localizationManager.currentLanguage.rawValue))
             }
         }
     }

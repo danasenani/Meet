@@ -8,7 +8,7 @@ struct MeetingTable: Identifiable, Codable, Sendable {
     var month: String // e.g., "December 2024"
     var meetingDate: Date // The actual date of the meeting
     var participantIDs: [String] // Array of user IDs
-    var maxParticipants: Int // Always 6
+    var maxParticipants: Int // Always 4
     var createdAt: Date
     
     var seatsLeft: Int {
@@ -27,6 +27,10 @@ struct MeetingTable: Identifiable, Codable, Sendable {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: meetingDate)
+    }
+    
+    var hasMeetingPassed: Bool {
+        return meetingDate < Date()
     }
     
     enum CodingKeys: String, CodingKey {

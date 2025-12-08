@@ -196,39 +196,42 @@ class TableService: ObservableObject {
         print("Successfully generated all tables for \(month)")
     }
 
-    // Generate random dates within the current month
+    // Generate random dates within the current month (only future dates)
     private func getRandomDatesInCurrentMonth(count: Int) -> [Date] {
         let calendar = Calendar.current
         let now = Date()
         
-        guard let monthInterval = calendar.dateInterval(of: .month, for: now),
-              let daysInMonth = calendar.range(of: .day, in: .month, for: now) else {
+        // Get current day number
+        let currentDay = calendar.component(.day, from: now)
+        
+        // Get last day of current month
+        guard let range = calendar.range(of: .day, in: .month, for: now) else {
             return Array(repeating: now, count: count)
         }
+        let lastDay = range.count
         
         var dates: [Date] = []
-        var usedDays: Set<Int> = []
         
-        // Generate unique random days
-        while dates.count < count {
-            let randomDay = Int.random(in: 1...daysInMonth.count)
+        // Generate dates from today to end of month
+        for _ in 0..<count {
+            let randomDay = Int.random(in: currentDay...lastDay)
             
-            // Avoid duplicates
-            if !usedDays.contains(randomDay) {
-                usedDays.insert(randomDay)
-                
-                var components = calendar.dateComponents([.year, .month], from: now)
-                components.day = randomDay
-                components.hour = Int.random(in: 10...20) // Random hour between 10 AM - 8 PM
-                components.minute = [0, 30].randomElement() // Either :00 or :30
-                
-                if let date = calendar.date(from: components) {
-                    dates.append(date)
+            var components = calendar.dateComponents([.year, .month], from: now)
+            components.day = randomDay
+            components.hour = Int.random(in: 14...20) // 2 PM to 8 PM
+            components.minute = [0, 30].randomElement() ?? 0
+            
+            if let date = calendar.date(from: components), date > now {
+                dates.append(date)
+            } else {
+                // If date is in past, use tomorrow
+                if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) {
+                    dates.append(tomorrow)
                 }
             }
         }
         
-        return dates.sorted() // Sort dates chronologically
+        return dates.sorted()
     }
     
     // Helper function to get current month string

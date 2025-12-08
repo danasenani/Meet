@@ -2,109 +2,106 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var authService: AuthService
+    @EnvironmentObject var localizationManager: LocalizationManager
+    @Environment(\.dismiss) var dismiss
+    
     @State private var phoneNumber = ""
     @State private var password = ""
+    @State private var isLoggingIn = false
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var isLoading = false
-   
+    
+    var strings: LocalizedStrings {
+        LocalizedStrings(lang: localizationManager.currentLanguage)
+    }
     
     var body: some View {
         ZStack {
             Color(red: 0.95, green: 0.94, blue: 0.92)
                 .ignoresSafeArea()
             
-            VStack(spacing: 20) {
+            VStack(spacing: 30) {
                 Spacer()
                 
-                Text("Let's Meet!")
-                    .font(.system(size: 32, weight: .semibold))
-                    .padding(.bottom, 40)
+                Text(strings.login)
+                    .font(localizationManager.isArabic ? .custom("Dubai-Bold", size: 28) : .title)
+                    .fontWeight(.semibold)
                 
-                // Phone Number Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Phone Number")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                    TextField("", text: $phoneNumber)
+                VStack(spacing: 16) {
+                    // Phone Number
+                    TextField(strings.phoneNumber, text: $phoneNumber)
+                        .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
                         .keyboardType(.phonePad)
                         .padding()
                         .background(Color.white)
-                        .cornerRadius(8)
-                }
-                .padding(.horizontal, 40)
-                
-                // Password Field
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Password")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                    SecureField("", text: $password)
+                        .cornerRadius(12)
+                        .multilineTextAlignment(localizationManager.isArabic ? .trailing : .leading)
+                    
+                    // Password
+                    SecureField(strings.password, text: $password)
+                        .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
                         .padding()
                         .background(Color.white)
-                        .cornerRadius(8)
+                        .cornerRadius(12)
                 }
                 .padding(.horizontal, 40)
                 
                 // Login Button
                 Button(action: login) {
-                    if isLoading {
+                    if isLoggingIn {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .padding()
                     } else {
-                        Text("Login")
-                            .font(.system(size: 18, weight: .medium))
+                        Text(strings.login)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                            .fontWeight(.medium)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                            .frame(height: 50)
+                            .padding()
                     }
                 }
-                .background(Color(red: 0.95, green: 0.7, blue: 0.7))
-                .cornerRadius(25)
+                .background(Color(red: 0.7, green: 0.85, blue: 0.85))
+                .cornerRadius(12)
                 .padding(.horizontal, 40)
-                .padding(.top, 20)
-                .disabled(isLoading)
-                
-                // Create Account Link
-                HStack {
-                    Text("New?")
-                        .foregroundColor(.gray)
-                    NavigationLink("Create Account", destination: CreateAccountView())
-                        .foregroundColor(.black)
-                }
-                .font(.system(size: 14))
-                .padding(.top, 10)
+                .disabled(isLoggingIn)
                 
                 Spacer()
+                
+                // Back to Join
+                Button(action: { dismiss() }) {
+                    Text(strings.join)
+                        .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 15) : .footnote)
+                        .foregroundColor(.gray)
+                }
+                .padding(.bottom, 40)
             }
         }
-        .navigationBarBackButtonHidden(false)
+        .navigationBarBackButtonHidden(true)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
         }
-        
     }
     
     func login() {
         guard !phoneNumber.isEmpty, !password.isEmpty else {
-            errorMessage = "Please fill in all fields"
+            errorMessage = "Please fill all fields"
             showError = true
             return
         }
         
-        isLoading = true
+        isLoggingIn = true
         
         authService.login(phoneNumber: phoneNumber, password: password) { result in
-            isLoading = false
+            isLoggingIn = false
             
             switch result {
             case .success:
-                // User is now fully loaded, navigation will happen automatically
-                print("✅ Login successful")
+                // Login successful - HomeView will show automatically
+                break
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 showError = true
@@ -115,4 +112,6 @@ struct LoginView: View {
 
 #Preview {
     LoginView()
+        .environmentObject(AuthService())
+        .environmentObject(LocalizationManager())
 }
