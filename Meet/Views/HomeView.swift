@@ -5,6 +5,7 @@ struct HomeView: View {
     @EnvironmentObject var localizationManager: LocalizationManager
     @StateObject private var tableService = TableService()
     @State private var showProfile = false
+    @State private var isLoading = true
     
     var strings: LocalizedStrings {
         LocalizedStrings(lang: localizationManager.currentLanguage)
@@ -14,24 +15,46 @@ struct HomeView: View {
         print("🔍 Loading data...")
         print("🔍 Current user: \(authService.currentUser?.name ?? "nil")")
         
-        if let user = authService.currentUser {
-            print("🔍 Fetching tables for gender: \(user.gender)")
-            
-            // First, try to generate tables if none exist for this month
-            tableService.generateMonthlyTables()
-            
-            // Then fetch tables
-            tableService.fetchTables(userGender: user.gender)
-            tableService.fetchMyBooking(userId: user.id ?? "")
-        } else {
+        guard let user = authService.currentUser else {
             print("❌ No current user found!")
+            isLoading = false
+            return
+        }
+        
+        isLoading = true
+        
+        print("🔍 Fetching tables for gender: \(user.gender)")
+        
+        // Fetch tables and booking
+        tableService.fetchTables(userGender: user.gender)
+        tableService.fetchMyBooking(userId: user.id ?? "")
+        
+        // Give it a moment to load
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            isLoading = false
         }
     }
     
     var body: some View {
         NavigationStack {
-            Group {
-                if tableService.myBooking != nil {
+            ZStack {
+                Color(red: 0.95, green: 0.94, blue: 0.92)
+                    .ignoresSafeArea()
+                
+                if isLoading {
+                    // Loading state
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(Color(red: 0.7, green: 0.85, blue: 0.85))
+                        
+                        Text(localizationManager.isArabic ?
+                             "...جاري التحميل" :
+                             "Loading...")
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                            .foregroundColor(.gray)
+                    }
+                } else if tableService.myBooking != nil {
                     // User has active booking - show booking status
                     BookingStatusView()
                         .environmentObject(authService)
@@ -39,42 +62,63 @@ struct HomeView: View {
                         .environmentObject(tableService)
                 } else {
                     // No booking - show event list
-                    ZStack {
-                        Color(red: 0.95, green: 0.94, blue: 0.92)
-                            .ignoresSafeArea()
-                        
-                        VStack(spacing: 0) {
-                            // Header
-                            HStack {
-                                VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 4) {
-                                    Text(strings.letsMeetIn)
-                                        .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 22) : .title2)
-                                        .fontWeight(.semibold)
-                                    Text(strings.riyadh)
-                                        .font(localizationManager.isArabic ? .custom("Dubai-Light", size: 22) : .title2)
-                                        .fontWeight(.light)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Spacer()
-                                
-                                Button(action: { showProfile = true }) {
-                                    if let user = authService.currentUser {
-                                        AvatarView(name: user.name, size: 40)
-                                    }
+                    VStack(spacing: 0) {
+                        // Header
+                        HStack {
+                            VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 4) {
+                                Text(strings.letsMeetIn)
+                                    .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 22) : .title2)
+                                    .fontWeight(.semibold)
+                                Text(strings.riyadh)
+                                    .font(localizationManager.isArabic ? .custom("Dubai-Light", size: 22) : .title2)
+                                    .fontWeight(.light)
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Spacer()
+                            
+                            Button(action: { showProfile = true }) {
+                                if let user = authService.currentUser {
+                                    AvatarView(name: user.name, size: 40)
                                 }
                             }
-                            .padding()
-                            
-                            // Subtitle
-                            Text(strings.chooseYourEvent)
-                                .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
-                                .foregroundColor(.gray)
-                                .frame(maxWidth: .infinity, alignment: localizationManager.isArabic ? .trailing : .leading)
-                                .padding(.horizontal)
-                                .padding(.bottom, 20)
-                            
-                            // Tables List
+                        }
+                        .padding()
+                        
+                        // Subtitle
+                        Text(strings.chooseYourEvent)
+                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                            .foregroundColor(.gray)
+                            .frame(maxWidth: .infinity, alignment: localizationManager.isArabic ? .trailing : .leading)
+                            .padding(.horizontal)
+                            .padding(.bottom, 20)
+                        
+                        // Tables List
+                        if tableService.tables.isEmpty {
+                            VStack(spacing: 16) {
+                                Image(systemName: "calendar.badge.exclamationmark")
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray)
+                                    .padding(.top, 60)
+                                
+                                Text(localizationManager.isArabic ?
+                                     "لا توجد فعاليات متاحة حاليًا" :
+                                     "No events available right now")
+                                    .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 17) : .body)
+                                    .foregroundColor(.gray)
+                                
+                                Button(action: loadData) {
+                                    HStack {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text(localizationManager.isArabic ? "تحديث" : "Refresh")
+                                            .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 15) : .subheadline)
+                                    }
+                                    .foregroundColor(Color(red: 0.7, green: 0.85, blue: 0.85))
+                                    .padding(.top, 10)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
                             ScrollView {
                                 VStack(spacing: 16) {
                                     ForEach(tableService.tables) { table in
@@ -87,6 +131,10 @@ struct HomeView: View {
                                     }
                                 }
                                 .padding(.horizontal)
+                                .padding(.bottom, 20)
+                            }
+                            .refreshable {
+                                loadData()
                             }
                         }
                     }
@@ -100,11 +148,6 @@ struct HomeView: View {
             }
             .onAppear {
                 loadData()
-            }
-            .onReceive(authService.$currentUser) { user in
-                if user != nil {
-                    loadData()
-                }
             }
         }
     }
@@ -166,24 +209,16 @@ struct TableRowView: View {
     
     func getActivityColor() -> Color {
         if table.isWomenOnly {
-            // All women-only events are pink
             return Color(red: 0.98, green: 0.8, blue: 0.8)
         } else {
-            // Regular versions - unique vibrant colors
             switch table.activityType {
-            case "Dinner": return Color(red: 0.95, green: 0.75, blue: 0.6)   // Orange/Peach
-            case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)     // Blue
-            case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)    // Purple
-            case "Walk": return Color(red: 0.7, green: 0.85, blue: 0.85)     // Teal
-            case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)       // Green
+            case "Dinner": return Color(red: 0.95, green: 0.75, blue: 0.6)
+            case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)
+            case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)
+            case "Walk": return Color(red: 0.7, green: 0.85, blue: 0.85)
+            case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)
             default: return Color.gray
             }
         }
     }
-}
-
-#Preview {
-    HomeView()
-        .environmentObject(AuthService())
-        .environmentObject(LocalizationManager())
 }

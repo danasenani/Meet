@@ -8,6 +8,7 @@ struct MeetApp: App {
     
     init() {
         FirebaseApp.configure()
+        NotificationService.shared.requestPermission() // ← Add this line
     }
     
     var body: some Scene {

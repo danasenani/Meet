@@ -11,6 +11,8 @@ struct ChatView: View {
     @State private var isSending = false
     @State private var selectedUser: User?
     @State private var showUserProfile = false
+    @State private var showParticipantsList = false
+    @State private var participants: [User] = []
     
     var strings: LocalizedStrings {
         LocalizedStrings(lang: localizationManager.currentLanguage)
@@ -38,16 +40,25 @@ struct ChatView: View {
                         
                         Spacer()
                         
-                        // Participant count
+                        // Participant count - TAPPABLE
                         if let booking = tableService.myBooking {
-                            HStack(spacing: 4) {
-                                Image(systemName: "person.2.fill")
-                                    .font(.caption)
-                                Text("\(booking.participantIDs.count)")
-                                    .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 13) : .caption)
-                                    .fontWeight(.semibold)
+                            Button(action: {
+                                fetchParticipants()
+                                showParticipantsList = true
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "person.2.fill")
+                                        .font(.caption)
+                                    Text("\(booking.participantIDs.count)")
+                                        .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 13) : .caption)
+                                        .fontWeight(.semibold)
+                                }
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(Color.white)
+                                .cornerRadius(16)
                             }
-                            .foregroundColor(.gray)
                         }
                     }
                     .padding()
@@ -141,6 +152,11 @@ struct ChatView: View {
                         .environmentObject(localizationManager)
                 }
             }
+            .sheet(isPresented: $showParticipantsList) {
+                ParticipantsListView(participants: participants)
+                    .environmentObject(localizationManager)
+                    .presentationDetents([.medium])
+            }
         }
     }
     
@@ -172,6 +188,27 @@ struct ChatView: View {
                 // Restore message text if failed
                 messageText = textToSend
             }
+        }
+    }
+    
+    func fetchParticipants() {
+        guard let participantIds = tableService.myBooking?.participantIDs else { return }
+        
+        var fetchedUsers: [User] = []
+        let group = DispatchGroup()
+        
+        for participantId in participantIds {
+            group.enter()
+            chatService.fetchUser(userId: participantId) { user in
+                if let user = user {
+                    fetchedUsers.append(user)
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            participants = fetchedUsers
         }
     }
 }
@@ -220,6 +257,84 @@ struct MessageBubbleView: View {
             
             if !isCurrentUser {
                 Spacer()
+            }
+        }
+    }
+}
+
+// NEW: Participants List View
+struct ParticipantsListView: View {
+    @EnvironmentObject var localizationManager: LocalizationManager
+    @Environment(\.dismiss) var dismiss
+    @State private var selectedUser: User?
+    @State private var showUserProfile = false
+    
+    let participants: [User]
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(red: 0.95, green: 0.94, blue: 0.92)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header
+                    HStack {
+                        Text(localizationManager.isArabic ? "المشاركون" : "Participants")
+                            .font(localizationManager.isArabic ? .custom("Dubai-Bold", size: 20) : .headline)
+                        
+                        Spacer()
+                        
+                        Button(action: { dismiss() }) {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.gray)
+                        }
+                    }
+                    .padding()
+                    
+                    // Participants List
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach(participants) { participant in
+                                Button(action: {
+                                    selectedUser = participant
+                                    showUserProfile = true
+                                }) {
+                                    HStack(spacing: 16) {
+                                        AvatarView(name: participant.name, size: 50)
+                                        
+                                        VStack(alignment: localizationManager.isArabic ? .trailing : .leading, spacing: 4) {
+                                            Text(participant.name)
+                                                .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 17) : .body)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.black)
+                                            
+                                            Text(participant.communicationMethod)
+                                                .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 15) : .subheadline)
+                                                .foregroundColor(.gray)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: localizationManager.isArabic ? .trailing : .leading)
+                                        
+                                        Image(systemName: localizationManager.isArabic ? "chevron.left" : "chevron.right")
+                                            .font(.caption)
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding()
+                                    .background(Color.white)
+                                    .cornerRadius(12)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                }
+            }
+            .navigationBarHidden(true)
+            .sheet(isPresented: $showUserProfile) {
+                if let user = selectedUser {
+                    UserProfileView(user: user)
+                        .environmentObject(localizationManager)
+                }
             }
         }
     }

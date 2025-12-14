@@ -11,6 +11,7 @@ struct BookingStatusView: View {
     @State private var showProfile = false
     @State private var showFeedback = false
     @State private var participants: [User] = []
+    @State private var hasNotifiedTableFull = false
     
     var strings: LocalizedStrings {
         LocalizedStrings(lang: localizationManager.currentLanguage)
@@ -95,6 +96,44 @@ struct BookingStatusView: View {
                             
                             // Buttons
                             VStack(spacing: 16) {
+                                // Instructional Text
+                                if booking.isFull {
+                                    VStack(spacing: 8) {
+                                        Text(localizationManager.isArabic ?
+                                             "!الطاولة ممتلئة" :
+                                             "Table is Full!")
+                                            .font(localizationManager.isArabic ? .custom("Dubai-Bold", size: 17) : .body)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(Color(red: 0.7, green: 0.85, blue: 0.85))
+                                        
+                                        Text(strings.groupReady)
+                                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 15) : .subheadline)
+                                            .foregroundColor(.gray)
+                                            .multilineTextAlignment(.center)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 12)
+                                } else {
+                                    VStack(spacing: 8) {
+                                        Text(localizationManager.isArabic ?
+                                             "(\(booking.seatsLeft)) في انتظار اكتمال الطاولة" :
+                                             "Waiting for table to fill (\(booking.seatsLeft) seats left)")
+                                            .font(localizationManager.isArabic ? .custom("Dubai-Medium", size: 15) : .subheadline)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.gray)
+                                        
+                                        Text(localizationManager.isArabic ?
+                                             "سيتم فتح الدردشة عند امتلاء الطاولة" :
+                                             "Chat will open when table is full")
+                                            .font(localizationManager.isArabic ? .custom("Dubai-Regular", size: 14) : .caption)
+                                            .foregroundColor(.gray.opacity(0.8))
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 12)
+                                }
+                                
                                 // Chat Button
                                 Button(action: { showChatView = true }) {
                                     Text(strings.chatToMeet)
@@ -162,6 +201,12 @@ struct BookingStatusView: View {
             }
             .onAppear {
                 checkAndShowFeedback()
+                checkTableFullAndNotify()
+            }
+            .onChange(of: tableService.myBooking?.isFull) { oldValue, newValue in
+                if newValue == true {
+                    checkTableFullAndNotify()
+                }
             }
         }
     }
@@ -242,25 +287,28 @@ struct BookingStatusView: View {
     
     func getActivityColor(_ activity: String, isWomenOnly: Bool) -> Color {
         if isWomenOnly {
-            // All women-only events are pink
             return Color(red: 0.98, green: 0.8, blue: 0.8)
         } else {
-            // Regular versions - unique vibrant colors
             switch activity {
-            case "Dinner": return Color(red: 0.95, green: 0.75, blue: 0.6)   // Orange/Peach
-            case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)     // Blue
-            case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)    // Purple
-            case "Walk": return Color(red: 0.7, green: 0.85, blue: 0.85)     // Teal
-            case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)       // Green
+            case "Dinner": return Color(red: 0.95, green: 0.75, blue: 0.6)
+            case "Coffee": return Color(red: 0.7, green: 0.8, blue: 0.9)
+            case "Camping": return Color(red: 0.9, green: 0.7, blue: 0.9)
+            case "Walk": return Color(red: 0.7, green: 0.85, blue: 0.85)
+            case "Bike": return Color(red: 0.8, green: 0.9, blue: 0.7)
             default: return Color.gray
             }
         }
     }
-}
-
-#Preview {
-    BookingStatusView()
-        .environmentObject(AuthService())
-        .environmentObject(LocalizationManager())
-        .environmentObject(TableService())
+    
+    func checkTableFullAndNotify() {
+        guard let booking = tableService.myBooking else { return }
+        
+        // Only notify once when table becomes full
+        if booking.isFull && !hasNotifiedTableFull {
+            hasNotifiedTableFull = true
+            NotificationService.shared.sendTableFullNotification(
+                activityName: strings.displayName(activity: booking.activityType, isWomenOnly: booking.isWomenOnly)
+            )
+        }
+    }
 }

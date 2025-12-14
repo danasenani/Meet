@@ -157,7 +157,7 @@ struct LocalizedStrings {
     
     // Confirm Booking
     var confirmMeeting: String {
-        lang == .arabic ? "تأكيد الاجتماع" : "Confirm Meeting"
+        lang == .arabic ? "انضم" : "Join"
     }
     
     var seatsAvailable: String {
@@ -165,7 +165,7 @@ struct LocalizedStrings {
     }
     
     var meet: String {
-        lang == .arabic ? "التقي" : "Meet"
+        lang == .arabic ? "!أنا معكم" : "I'm In!"
     }
     
     var cancel: String {
@@ -173,6 +173,7 @@ struct LocalizedStrings {
     }
     
     // Booking Status
+    
     var youreIn: String {
         lang == .arabic ? "!أنت مسجل" : "You're in!"
     }
@@ -182,11 +183,11 @@ struct LocalizedStrings {
     }
     
     var chatToMeet: String {
-        lang == .arabic ? "الدردشة للقاء" : "Chat To Meet"
+        lang == .arabic ? "الدردشة للتخطيط" : "Chat to Plan"
     }
     
     var cancelMeeting: String {
-        lang == .arabic ? "إلغاء الاجتماع" : "Cancel Meeting"
+        lang == .arabic ? "غادر الطاولة" : "Leave Table"
     }
     
     // Chat
@@ -246,5 +247,9 @@ struct LocalizedStrings {
     
     var thankYou: String {
         lang == .arabic ? "!شكرًا لك" : "Thank You!"
+    }
+    
+    var groupReady: String {
+        lang == .arabic ? "مجموعتك جاهزة! استخدم الدردشة لتحديد موعد ومكان اللقاء" : "Your group is ready! Use chat to decide when and where to meet up"
     }
 }

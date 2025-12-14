@@ -7,103 +7,123 @@ class TableService: ObservableObject {
     @Published var myBooking: MeetingTable?
     
     private let db = Firestore.firestore()
+    private var listener: ListenerRegistration?
     
-    // Fetch all tables for current month
+    // Fetch tables based on user gender
     func fetchTables(userGender: String) {
-        let currentMonth = getCurrentMonthString()
+        print("📋 Fetching tables for gender: \(userGender)")
         
-        db.collection("tables")
-            .whereField("month", isEqualTo: currentMonth)
-            .addSnapshotListener { [weak self] snapshot, error in
-                if let error = error {
-                    print("Error fetching tables: \(error)")
-                    return
-                }
-                
-                guard let documents = snapshot?.documents else { return }
-                
-                self?.tables = documents.compactMap { doc in
-                    try? doc.data(as: MeetingTable.self)
-                }.filter { table in
-                    // Filter women-only tables for male users
-                    if userGender.lowercased() == "male" && table.isWomenOnly {
-                        return false
-                    }
-                    return true
-                }
+        // Stop any existing listener
+        listener?.remove()
+        
+        // Determine which tables to show
+        let query: Query
+        if userGender == "Female" {
+            // Female users see: all tables + women-only tables
+            query = db.collection("tables")
+                .whereField("meetingDate", isGreaterThan: Date())
+                .order(by: "meetingDate")
+        } else {
+            // Male users see: only non-women-only tables
+            query = db.collection("tables")
+                .whereField("isWomenOnly", isEqualTo: false)
+                .whereField("meetingDate", isGreaterThan: Date())
+                .order(by: "meetingDate")
+        }
+        
+        listener = query.addSnapshotListener { [weak self] snapshot, error in
+            if let error = error {
+                print("❌ Error fetching tables: \(error)")
+                return
             }
+            
+            guard let documents = snapshot?.documents else {
+                print("📋 No tables found")
+                self?.tables = []
+                return
+            }
+            
+            self?.tables = documents.compactMap { doc -> MeetingTable? in
+                try? doc.data(as: MeetingTable.self)
+            }
+            
+            print("✅ Fetched \(self?.tables.count ?? 0) tables")
+        }
     }
     
     // Fetch user's current booking
     func fetchMyBooking(userId: String) {
-        let currentMonth = getCurrentMonthString()
+        print("📋 Fetching booking for user: \(userId)")
         
         db.collection("tables")
-            .whereField("month", isEqualTo: currentMonth)
             .whereField("participantIDs", arrayContains: userId)
+            .whereField("meetingDate", isGreaterThan: Date())
+            .limit(to: 1)
             .addSnapshotListener { [weak self] snapshot, error in
                 if let error = error {
-                    print("Error fetching booking: \(error)")
+                    print("❌ Error fetching booking: \(error)")
                     return
                 }
                 
                 guard let document = snapshot?.documents.first else {
+                    print("📋 No active booking found")
                     self?.myBooking = nil
                     return
                 }
                 
                 self?.myBooking = try? document.data(as: MeetingTable.self)
+                print("✅ Found active booking: \(self?.myBooking?.activityType ?? "unknown")")
             }
     }
     
     // Book a table
     func bookTable(tableId: String, userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        print("📝 Booking table \(tableId) for user \(userId)")
+        
         let tableRef = db.collection("tables").document(tableId)
         
         db.runTransaction({ (transaction, errorPointer) -> Any? in
-            let document: DocumentSnapshot
+            let tableDocument: DocumentSnapshot
             do {
-                try document = transaction.getDocument(tableRef)
+                try tableDocument = transaction.getDocument(tableRef)
             } catch let fetchError as NSError {
                 errorPointer?.pointee = fetchError
                 return nil
             }
             
-            guard var table = try? document.data(as: MeetingTable.self) else {
-                let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to parse table"])
+            guard let participantIDs = tableDocument.data()?["participantIDs"] as? [String],
+                  let maxParticipants = tableDocument.data()?["maxParticipants"] as? Int else {
+                let error = NSError(domain: "TableService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid table data"])
                 errorPointer?.pointee = error
                 return nil
             }
             
             // Check if table is full
-            if table.isFull {
-                let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Table is full"])
+            if participantIDs.count >= maxParticipants {
+                let error = NSError(domain: "TableService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Table is full"])
                 errorPointer?.pointee = error
                 return nil
             }
             
             // Check if user already booked
-            if table.participantIDs.contains(userId) {
-                let error = NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "Already booked"])
+            if participantIDs.contains(userId) {
+                let error = NSError(domain: "TableService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Already booked"])
                 errorPointer?.pointee = error
                 return nil
             }
             
             // Add user to participants
-            table.participantIDs.append(userId)
-            
-            do {
-                try transaction.setData(from: table, forDocument: tableRef)
-            } catch let setError as NSError {
-                errorPointer?.pointee = setError
-                return nil
-            }
+            transaction.updateData([
+                "participantIDs": FieldValue.arrayUnion([userId])
+            ], forDocument: tableRef)
             
             return nil
         }) { (object, error) in
             if let error = error {
+                print("❌ Booking failed: \(error)")
                 completion(.failure(error))
             } else {
+                print("✅ Booking successful")
                 completion(.success(()))
             }
         }
@@ -111,134 +131,140 @@ class TableService: ObservableObject {
     
     // Cancel booking
     func cancelBooking(tableId: String, userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        let tableRef = db.collection("tables").document(tableId)
+        print("🗑️ Cancelling booking for table \(tableId)")
         
-        tableRef.updateData([
+        db.collection("tables").document(tableId).updateData([
             "participantIDs": FieldValue.arrayRemove([userId])
         ]) { error in
             if let error = error {
+                print("❌ Cancel failed: \(error)")
                 completion(.failure(error))
             } else {
+                print("✅ Booking cancelled")
                 completion(.success(()))
             }
         }
     }
     
-    // Generate tables for the month (admin function)
-    func generateMonthlyTables() {
-        let currentMonth = getCurrentMonthString()
+    // Clean up tables with past dates
+    func cleanupPastTables() {
+        print("🧹 Cleaning up past tables...")
         
-        // First, check if tables already exist for this month
+        let now = Date()
+        
         db.collection("tables")
-            .whereField("month", isEqualTo: currentMonth)
-            .getDocuments { [weak self] snapshot, error in
+            .whereField("meetingDate", isLessThan: now)
+            .getDocuments { snapshot, error in
                 if let error = error {
-                    print("Error checking tables: \(error)")
+                    print("❌ Error fetching past tables: \(error)")
                     return
                 }
                 
-                // If tables already exist, don't generate
-                if let count = snapshot?.documents.count, count > 0 {
-                    print("Tables already exist for \(currentMonth). Skipping generation.")
-                    return
-                }
+                guard let documents = snapshot?.documents else { return }
                 
-                // Generate tables
-                self?.createTables(for: currentMonth)
+                print("🧹 Found \(documents.count) past tables to delete")
+                
+                for document in documents {
+                    document.reference.delete { error in
+                        if let error = error {
+                            print("❌ Error deleting table: \(error)")
+                        } else {
+                            print("✅ Deleted past table: \(document.documentID)")
+                        }
+                    }
+                }
             }
     }
-
-    private func createTables(for month: String) {
-        let activities = ["Dinner", "Coffee", "Camping", "Walk", "Bike"]
+    
+    // Generate monthly tables (call this once to create tables for the month)
+    func generateMonthlyTables() {
+        print("🔨 Generating monthly tables...")
         
-        // Get random dates for this month
-        let randomDates = getRandomDatesInCurrentMonth(count: 10) // 5 activities × 2 versions
-        var dateIndex = 0
-        
-        // Create regular and women-only versions
-        for activity in activities {
-            // Regular table
-            let regularTable = MeetingTable(
-                id: nil,
-                activityType: activity,
-                isWomenOnly: false,
-                month: month,
-                meetingDate: randomDates[dateIndex],
-                participantIDs: [],
-                maxParticipants: 4,
-                createdAt: Date()
-            )
-            dateIndex += 1
-            
-            // Women-only table
-            let womenTable = MeetingTable(
-                id: nil,
-                activityType: activity,
-                isWomenOnly: true,
-                month: month,
-                meetingDate: randomDates[dateIndex],
-                participantIDs: [],
-                maxParticipants: 4,
-                createdAt: Date()
-            )
-            dateIndex += 1
-            
-            // Save to Firestore
-            do {
-                try db.collection("tables").addDocument(from: regularTable)
-                try db.collection("tables").addDocument(from: womenTable)
-                print("Created tables for \(activity)")
-            } catch {
-                print("Error creating tables: \(error)")
-            }
-        }
-        
-        print("Successfully generated all tables for \(month)")
-    }
-
-    // Generate random dates within the current month (only future dates)
-    private func getRandomDatesInCurrentMonth(count: Int) -> [Date] {
         let calendar = Calendar.current
         let now = Date()
         
-        // Get current day number
-        let currentDay = calendar.component(.day, from: now)
+        // Check if tables already exist for this month
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)!
         
-        // Get last day of current month
-        guard let range = calendar.range(of: .day, in: .month, for: now) else {
-            return Array(repeating: now, count: count)
-        }
-        let lastDay = range.count
-        
-        var dates: [Date] = []
-        
-        // Generate dates from today to end of month
-        for _ in 0..<count {
-            let randomDay = Int.random(in: currentDay...lastDay)
-            
-            var components = calendar.dateComponents([.year, .month], from: now)
-            components.day = randomDay
-            components.hour = Int.random(in: 14...20) // 2 PM to 8 PM
-            components.minute = [0, 30].randomElement() ?? 0
-            
-            if let date = calendar.date(from: components), date > now {
-                dates.append(date)
-            } else {
-                // If date is in past, use tomorrow
-                if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) {
-                    dates.append(tomorrow)
+        db.collection("tables")
+            .whereField("meetingDate", isGreaterThanOrEqualTo: startOfMonth)
+            .whereField("meetingDate", isLessThanOrEqualTo: endOfMonth)
+            .getDocuments { [weak self] snapshot, error in
+                if let error = error {
+                    print("❌ Error checking existing tables: \(error)")
+                    return
                 }
+                
+                if let count = snapshot?.documents.count, count > 0 {
+                    print("✅ Tables already exist for this month (\(count) tables)")
+                    return
+                }
+                
+                print("📅 No tables found, creating new ones...")
+                self?.createTablesForMonth()
             }
-        }
-        
-        return dates.sorted()
     }
     
-    // Helper function to get current month string
-    private func getCurrentMonthString() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM yyyy"
-        return formatter.string(from: Date())
+    private func createTablesForMonth() {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Get dates for the rest of the month
+        guard let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, day: -1),
+                                            to: calendar.startOfDay(for: now)) else { return }
+        
+        var currentDate = calendar.startOfDay(for: now)
+        
+        let activities = ["Dinner", "Coffee", "Camping", "Walk", "Bike"]
+        
+        while currentDate <= endOfMonth {
+            // Skip if date is in the past
+            if currentDate >= now {
+                // Create one table per activity type
+                for activity in activities {
+                    // Regular table
+                    // Regular table
+                    let regularTable = MeetingTable(
+                        id: nil,
+                        activityType: activity,
+                        isWomenOnly: false,
+                        month: currentDate.formatted(.dateTime.month(.wide).year()),
+                        meetingDate: currentDate,
+                        participantIDs: [],
+                        maxParticipants: 4,
+                        createdAt: Date()
+                    )
+
+                    // Women-only table
+                    let womenOnlyTable = MeetingTable(
+                        id: nil,
+                        activityType: activity,
+                        isWomenOnly: true,
+                        month: currentDate.formatted(.dateTime.month(.wide).year()),
+                        meetingDate: currentDate,
+                        participantIDs: [],
+                        maxParticipants: 4,
+                        createdAt: Date()
+                    )
+                    // Save to Firebase
+                    do {
+                        try db.collection("tables").addDocument(from: regularTable)
+                        try db.collection("tables").addDocument(from: womenOnlyTable)
+                    } catch {
+                        print("❌ Error creating table: \(error)")
+                    }
+                }
+            }
+            
+            // Move to next day
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+        }
+        
+        print("✅ Monthly tables created")
+    }
+    
+    deinit {
+        listener?.remove()
     }
 }
-
